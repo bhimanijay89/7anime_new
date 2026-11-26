@@ -1,4 +1,4 @@
-export type ProviderId = 'animetvplus' | 'nxsha' | 'megaplay';
+export type ProviderId = 'animetvplus' | 'nxsha' | 'megaplay' | 'anivault-api';
 
 export type PlayerServerId = 'server1' | 'beta' | 'default' | 'hindi';
 
@@ -41,12 +41,24 @@ export interface EmbedResolveInput {
   autoplay?: boolean;
 }
 
+export interface ResolvedSubtitleTrack {
+  lang?: string;
+  label: string;
+  default?: boolean;
+  src?: string;
+  url?: string;
+}
+
 export interface ResolvedEmbedResult {
   ok: boolean;
   provider: ProviderId;
   serverId: PlayerServerId;
   serverLabel: string;
   embedUrl: string | null;
+  hlsProxyUrl?: string | null;
+  m3u8?: string | null;
+  playbackMode?: string | null;
+  subtitles?: ResolvedSubtitleTrack[];
   sandboxMode: SandboxMode;
   sandboxAttribute?: string;
   allowAttribute: string;
@@ -64,8 +76,11 @@ export interface ResolvedEmbedResult {
     | 'missing_tmdb_id'
     | 'unsupported_media_type'
     | 'invalid_season'
-    | 'invalid_episode';
+    | 'invalid_episode'
+    | 'api_error';
   errorMessage?: string;
+  loading?: boolean;
+  resolvedServerName?: string | null;
 }
 
 export interface ParsedEmbedProgress {

@@ -6,6 +6,8 @@ import { STILLS_POOL } from '@/src/data/catalogService';
 import { GlassPlayer } from '@/src/components/GlassPlayer';
 import { AvatarBadge } from '@/src/components/BrandMark';
 import { AniListService, generateEpisodesForAniList } from '@/src/services/anilist';
+import { createLoadingEmbed, resolveAniVaultStream } from '@/src/services/player/anivaultApi';
+import type { ResolvedEmbedResult } from '@/src/services/player';
 import type { AnimeTitle } from '@/src/types/anime';
 
 export const WatchTogetherPage: React.FC = () => {
@@ -46,6 +48,48 @@ export const WatchTogetherPage: React.FC = () => {
     if (!roomCode) return null;
     return watchRooms.find((r) => r.code.toLowerCase() === roomCode.toLowerCase()) ?? watchRooms[0];
   }, [roomCode, watchRooms]);
+
+  const roomAnime = selectedAnime ?? animeMatches[0];
+  const [resolvedEmbed, setResolvedEmbed] = useState<ResolvedEmbedResult>(() =>
+    createLoadingEmbed('default')
+  );
+  const [streamRetryKey, setStreamRetryKey] = useState(0);
+
+  useEffect(() => {
+    if (!roomCode || !activeRoom || !roomAnime) return;
+
+    const episodes = generateEpisodesForAniList(roomAnime, STILLS_POOL);
+    const episode = episodes.find((item) => item.number === activeRoom.episode) ?? episodes[0];
+    if (!episode) return;
+
+    const controller = new AbortController();
+    const identifiers = {
+      anilistId: roomAnime.anilistId ?? roomAnime.id,
+      malId: roomAnime.malId,
+      episodeNumber: episode.number,
+    };
+
+    setResolvedEmbed(createLoadingEmbed('default', identifiers));
+    resolveAniVaultStream({
+      server: 'default',
+      ...identifiers,
+      audioMode: activeRoom.audioMode,
+      signal: controller.signal,
+    }).then((result) => {
+      if (!controller.signal.aborted) setResolvedEmbed(result);
+    });
+
+    return () => controller.abort();
+  }, [
+    roomCode,
+    activeRoom?.episode,
+    activeRoom?.audioMode,
+    roomAnime?.anilistId,
+    roomAnime?.id,
+    roomAnime?.malId,
+    roomAnime?.routeId,
+    streamRetryKey,
+  ]);
 
   // Inside Room (/watch-together/:code)
   if (roomCode && activeRoom) {
@@ -99,6 +143,8 @@ export const WatchTogetherPage: React.FC = () => {
             episode={ep}
             audioMode={activeRoom.audioMode}
             server="default"
+            resolvedEmbed={resolvedEmbed}
+            onRetryResolve={() => setStreamRetryKey((key) => key + 1)}
             hasPrev={false}
             hasNext={false}
           />

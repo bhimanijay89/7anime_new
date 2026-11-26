@@ -35,10 +35,11 @@ import {
   ORDERED_SERVER_IDS,
   SERVER_DESCRIPTORS,
   normalizePlayerServer,
-  resolvePlayerEmbed,
   type PlayerServerId,
+  type ResolvedEmbedResult,
 } from '@/src/services/player';
 import type { AnimeTitle, EpisodeItem, EpisodeKind } from '@/src/types/anime';
+import { createLoadingEmbed, resolveAniVaultStream } from '@/src/services/player/anivaultApi';
 import type { AnimeEpisodeCatalogue } from '@7anime/shared';
 
 function extractSeasonNumberFromTitle(title?: string | null): number {
@@ -355,34 +356,49 @@ export const WatchPage: React.FC = () => {
   const [sizePopover, setSizePopover] = useState(false);
   const [synExpanded, setSynExpanded] = useState(false);
 
-  const resolvedEmbed = useMemo(() => {
-    return resolvePlayerEmbed({
-      server,
-      anilistId: anime?.anilistId ?? anime?.id,
-      malId: anime?.malId,
-      tmdbId: anime?.tmdbId,
-      mediaType:
-        anime?.mediaType ??
-        (String(anime?.type || '').toUpperCase() === 'MOVIE' ? 'movie' : 'tv'),
-      seasonNumber: currentEpisode.season,
+  const [resolvedEmbed, setResolvedEmbed] = useState<ResolvedEmbedResult>(() =>
+    createLoadingEmbed(server)
+  );
+  const [streamRetryKey, setStreamRetryKey] = useState(0);
+
+  useEffect(() => {
+    if (!anime) {
+      setResolvedEmbed(createLoadingEmbed(server));
+      return;
+    }
+
+    const controller = new AbortController();
+    setResolvedEmbed(createLoadingEmbed(server, {
+      anilistId: anime.anilistId ?? anime.id,
+      malId: anime.malId,
+      tmdbId: anime.tmdbId,
       episodeNumber: currentEpisode.number,
-      tmdbEpisodeNumber: currentEpisode.tmdbEpisodeNumber,
+    }, playerPrefs.autoplayNext));
+
+    resolveAniVaultStream({
+      server,
+      anilistId: anime.anilistId ?? anime.id,
+      malId: anime.malId,
+      tmdbId: anime.tmdbId,
+      episodeNumber: currentEpisode.number,
       audioMode,
       autoplay: playerPrefs.autoplayNext,
+      signal: controller.signal,
+    }).then((result) => {
+      if (!controller.signal.aborted) setResolvedEmbed(result);
     });
+
+    return () => controller.abort();
   }, [
     server,
     anime?.anilistId,
     anime?.id,
     anime?.malId,
     anime?.tmdbId,
-    anime?.mediaType,
-    anime?.type,
-    currentEpisode.season,
     currentEpisode.number,
-    currentEpisode.tmdbEpisodeNumber,
     audioMode,
     playerPrefs.autoplayNext,
+    streamRetryKey,
   ]);
 
   const handleSelectServer = (nextServer: PlayerServerId) => {
@@ -474,6 +490,7 @@ export const WatchPage: React.FC = () => {
             audioMode={audioMode}
             server={server}
             resolvedEmbed={resolvedEmbed}
+            onRetryResolve={() => setStreamRetryKey((key) => key + 1)}
             onSelectServer={handleSelectServer}
             hasPrev={hasPrev}
             hasNext={hasNext}
@@ -668,7 +685,7 @@ export const WatchPage: React.FC = () => {
             <div className="watch-server-notice">
               <Info size={16} style={{ flexShrink: 0, opacity: 0.78 }} />
               <span style={{ flex: 1 }}>
-                Subtitle or audio issues, lag or buffering? Switch servers: the Beta server is recommended, and the Backup server lets you switch location.
+                Subtitle or audio issues, lag or buffering? Try another streaming source below.
               </span>
               <button
                 type="button"
