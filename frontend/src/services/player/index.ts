@@ -5,3 +5,5 @@ export * from './adapters/animetvplusAdapter';
 export * from './adapters/nxshaAdapter';
 export * from './adapters/megaplayAdapter';
 export * from './anivaultApi';
+export * from './ambientSettings';
+export * from './hls/index.ts';

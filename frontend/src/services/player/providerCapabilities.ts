@@ -4,7 +4,7 @@ import type {
   ProviderId,
   SandboxMode,
   ServerDescriptor,
-} from './types';
+} from './types.ts';
 
 export const BASE_ALLOW_PERMISSIONS =
   'fullscreen; picture-in-picture; encrypted-media';

@@ -54,6 +54,7 @@ export const WatchTogetherPage: React.FC = () => {
     createLoadingEmbed('default')
   );
   const [streamRetryKey, setStreamRetryKey] = useState(0);
+  const bypassCacheRef = React.useRef(false);
 
   useEffect(() => {
     if (!roomCode || !activeRoom || !roomAnime) return;
@@ -63,6 +64,8 @@ export const WatchTogetherPage: React.FC = () => {
     if (!episode) return;
 
     const controller = new AbortController();
+    const shouldBypass = bypassCacheRef.current;
+    bypassCacheRef.current = false;
     const identifiers = {
       anilistId: roomAnime.anilistId ?? roomAnime.id,
       malId: roomAnime.malId,
@@ -74,6 +77,7 @@ export const WatchTogetherPage: React.FC = () => {
       server: 'default',
       ...identifiers,
       audioMode: activeRoom.audioMode,
+      bypassCache: shouldBypass,
       signal: controller.signal,
     }).then((result) => {
       if (!controller.signal.aborted) setResolvedEmbed(result);
@@ -144,7 +148,10 @@ export const WatchTogetherPage: React.FC = () => {
             audioMode={activeRoom.audioMode}
             server="default"
             resolvedEmbed={resolvedEmbed}
-            onRetryResolve={() => setStreamRetryKey((key) => key + 1)}
+            onRetryResolve={() => {
+              bypassCacheRef.current = true;
+              setStreamRetryKey((key) => key + 1);
+            }}
             hasPrev={false}
             hasNext={false}
           />

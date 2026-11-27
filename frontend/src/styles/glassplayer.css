@@ -5,6 +5,7 @@
   width: min(100%, 1984px);
   margin-inline: auto;
   padding: calc(var(--mh-offset) + 12px) var(--pad) 40px;
+  overflow-x: clip;
 }
 
 @media (max-width: 767px) {
@@ -41,28 +42,59 @@
 
 .glassplayer-wrap {
   position: relative;
-  z-index: 45;
 }
 
+.glassplayer-wrap > .ambientlight .ambientlight__container {
+  z-index: 41;
+}
+
+.glassplayer.is-fullscreen > .ambientlight .ambientlight__container,
+.glassplayer:fullscreen > .ambientlight .ambientlight__container {
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* Pre-playback poster glow shown only until WebGL/Canvas Ambilight renders live video frames */
 .glassplayer-ambient {
   position: absolute;
-  inset: -28px;
-  z-index: -1;
-  border-radius: 28px;
-  opacity: 0.48;
-  filter: blur(56px) saturate(1.5);
+  inset: -44px;
+  z-index: 41;
+  border-radius: 44px;
+  opacity: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease;
+  transition: opacity var(--ambient-fade, 497ms) ease;
+}
+
+.glassplayer-ambient.is-enabled {
+  opacity: 0.72;
+}
+
+.glassplayer-ambient__fallback {
+  position: absolute;
+  inset: 10%;
+  border-radius: inherit;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.72;
+  pointer-events: none;
+  filter: blur(42px) saturate(1.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glassplayer-ambient {
+    transition: none;
+  }
 }
 
 .glassplayer {
   position: relative;
+  z-index: 45;
   width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: 16px;
   overflow: hidden;
   background: #06070b;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.72);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.56);
   user-select: none;
   outline: none;
 }
@@ -213,6 +245,104 @@
   transform: translate(-50%, -50%);
 }
 
+.glassplayer__quality {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.glassplayer__quality-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(12, 13, 18, 0.72);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.glassplayer__quality-btn:hover {
+  background: rgba(24, 26, 36, 0.9);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.glassplayer__quality-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 170px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(12, 13, 18, 0.94);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 12;
+}
+
+.glassplayer__quality-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+
+.glassplayer__quality-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.glassplayer__quality-option.is-active {
+  background: rgba(var(--c-accent, 178 156 224) / 0.22);
+  color: #ffffff;
+  font-weight: 650;
+}
+
+.glassplayer__quality-meta {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.glassplayer__diagnostics {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 8;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 12, 18, 0.8);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 11px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  max-width: 280px;
+}
+
 .glassplayer__controls {
   position: absolute;
   left: 0;
@@ -340,12 +470,35 @@
 
 /* Watch Action Bar below video */
 .watch-toolbar {
+  position: relative;
+  z-index: 46;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   margin-top: 12px;
+}
+
+.watch-server-notice,
+.watch-server-row,
+.watch-aside,
+.watch-panel,
+.watch-ep-summary,
+.watch-comments-slot {
+  position: relative;
+  z-index: 44;
+}
+
+.watch-ep-summary h1,
+.watch-ep-summary p,
+.watch-ep-summary button,
+.watch-server-notice {
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.72);
+}
+
+.watch-server-notice {
+  background: rgba(12, 13, 18, 0.56);
 }
 
 .watch-toolbar__pills {
@@ -1626,4 +1779,3 @@
   color: #09090b;
   border-color: #ffffff;
 }
-

@@ -17,6 +17,7 @@ import { AccountSection, ACCOUNT_SUBS, type AccountSub } from '@/src/components/
 import { useApp } from '@/src/context/AppContext';
 import { ACCENT_SWATCHES, THEME_OPTIONS } from '@/src/utils/themeUtils';
 import { ProfileStyleModal } from '@/src/components/profile/ProfileStyleModal';
+import { AmbientSettingsControls } from '@/src/components/AmbientSettingsControls';
 import { apiClient } from '@/src/services/apiClient';
 import { discordPresenceService, type PresenceState } from '@/src/services/discordPresenceService';
 import { cacheManager, imageTracker, type CacheMetrics } from '@/src/services/cache';
@@ -150,7 +151,7 @@ export const SettingsPage: React.FC = () => {
 
   const sections: { id: SettingsSection; label: string; icon: React.ReactNode; keywords: string }[] = [
     { id: 'account', label: t('settings.account'), icon: <User size={16} />, keywords: 'account sign in profile sync guest overview visibility connected password devices' },
-    { id: 'appearance', label: t('settings.appearance'), icon: <Sun size={16} />, keywords: 'theme accent dark light language english animations blur text size' },
+    { id: 'appearance', label: t('settings.appearance'), icon: <Sun size={16} />, keywords: 'theme accent dark light language english animations blur text size ambient spread fade glow lighting view modes small theater fullscreen' },
     { id: 'notifications', label: t('settings.notifications'), icon: <Bell size={16} />, keywords: 'alerts push episodes privacy analytics diagnostics' },
     { id: 'discord', label: 'Discord Presence', icon: <Radio size={16} />, keywords: 'discord rich presence activity watching companion game status' },
     { id: 'data', label: t('settings.yourData'), icon: <Lock size={16} />, keywords: 'export history reset device storage cache l1 l2' },
@@ -525,6 +526,10 @@ export const SettingsPage: React.FC = () => {
                     />
                   </label>
                 </div>
+              </div>
+
+              <div className="settings-card">
+                <AmbientSettingsControls variant="card" />
               </div>
             </section>
           )}

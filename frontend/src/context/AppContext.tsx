@@ -11,6 +11,7 @@ import {
 import { translate } from '@/src/i18n/translations';
 import type { LocaleEntry, LocaleTag, TextDir } from '@/src/types/i18n';
 import type {
+  AmbientSettings,
   CaptionSettings,
   ContentPreferences,
   DiscordPresencePreferences,
@@ -18,6 +19,10 @@ import type {
   PrivacyPreferences,
   ThemePreferences,
 } from '@/src/types/settings';
+import {
+  DEFAULT_AMBIENT_SETTINGS,
+  normalizeAmbientSettings,
+} from '@/src/services/player/ambientSettings';
 import { discordPresenceService } from '@/src/services/discordPresenceService';
 import type { AuthProvider, UserProfile, WatchStatus } from '@/src/types/user';
 import type { ChatMessage, ForumCategory, ForumThread, WatchRoom } from '@/src/types/community';
@@ -95,6 +100,7 @@ export const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
   toastDurationSec: 1.1,
   pauseMenu: true,
   ambientMode: true,
+  ambientSettings: DEFAULT_AMBIENT_SETTINGS,
   lightsOffBrightness: 8,
   theaterMode: false,
   lightsOff: false,
@@ -246,8 +252,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [contentPrefs, setContentPrefs] = useState<ContentPreferences>(() =>
     readJson(STORAGE_KEYS.content, DEFAULT_CONTENT_PREFS)
   );
-  const [playerPrefs, setPlayerPrefs] = useState<PlayerPreferences>(() =>
-    readJson(STORAGE_KEYS.player, DEFAULT_PLAYER_PREFS)
+  const [playerPrefs, setPlayerPrefsState] = useState<PlayerPreferences>(() => {
+    const merged = readJson(STORAGE_KEYS.player, DEFAULT_PLAYER_PREFS);
+    const normalizedAmbient = normalizeAmbientSettings(
+      merged.ambientSettings,
+      typeof merged.ambientMode === 'boolean' ? merged.ambientMode : DEFAULT_PLAYER_PREFS.ambientMode
+    );
+    return {
+      ...merged,
+      controlButtons: {
+        ...DEFAULT_PLAYER_PREFS.controlButtons,
+        ...(merged.controlButtons ?? {}),
+      },
+      ambientMode: normalizedAmbient.enabled,
+      ambientSettings: normalizedAmbient,
+    };
+  });
+
+  const setPlayerPrefs = useCallback<React.Dispatch<React.SetStateAction<PlayerPreferences>>>(
+    (action) => {
+      setPlayerPrefsState((prev) => {
+        const draft = typeof action === 'function' ? action(prev) : action;
+        const ambientSettingsChanged = draft.ambientSettings !== prev.ambientSettings;
+        const ambientModeChanged = draft.ambientMode !== prev.ambientMode;
+
+        const targetEnabled = ambientSettingsChanged
+          ? Boolean(draft.ambientSettings?.enabled ?? draft.ambientMode)
+          : ambientModeChanged
+            ? Boolean(draft.ambientMode)
+            : Boolean(draft.ambientSettings?.enabled ?? draft.ambientMode);
+
+        const normalizedAmbient: AmbientSettings = normalizeAmbientSettings(
+          {
+            ...(draft.ambientSettings ?? prev.ambientSettings),
+            enabled: targetEnabled,
+          },
+          targetEnabled
+        );
+
+        return {
+          ...DEFAULT_PLAYER_PREFS,
+          ...draft,
+          controlButtons: {
+            ...DEFAULT_PLAYER_PREFS.controlButtons,
+            ...(draft.controlButtons ?? prev.controlButtons),
+          },
+          ambientMode: normalizedAmbient.enabled,
+          ambientSettings: normalizedAmbient,
+        };
+      });
+    },
+    []
   );
   const [captionPrefs, setCaptionPrefs] = useState<CaptionSettings>(() =>
     readJson(STORAGE_KEYS.captions, DEFAULT_CAPTION_PREFS)

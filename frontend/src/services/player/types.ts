@@ -81,6 +81,8 @@ export interface ResolvedEmbedResult {
   errorMessage?: string;
   loading?: boolean;
   resolvedServerName?: string | null;
+  resolvedAtMs?: number;
+  resolutionLatencyMs?: number;
 }
 
 export interface ParsedEmbedProgress {

@@ -41,6 +41,23 @@ export interface ShortcutBinding {
   altKeys?: string[];
 }
 
+export type AmbientLayoutMode = 'small' | 'theater' | 'fullscreen';
+export type AmbientViewMode = 'all' | AmbientLayoutMode;
+
+export interface AmbientEnabledLayouts {
+  small: boolean;
+  theater: boolean;
+  fullscreen: boolean;
+}
+
+export interface AmbientSettings {
+  enabled: boolean;
+  blur: number;
+  spread: number;
+  fadeDuration: number;
+  enabledLayouts: AmbientEnabledLayouts;
+}
+
 export interface PlayerPreferences {
   preferredAudio: 'sub' | 'dub';
   defaultServer: PlayerServer;
@@ -57,6 +74,7 @@ export interface PlayerPreferences {
   toastDurationSec: number;
   pauseMenu: boolean;
   ambientMode: boolean;
+  ambientSettings: AmbientSettings;
   lightsOffBrightness: number;
   theaterMode: boolean;
   lightsOff: boolean;

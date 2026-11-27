@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Captions,
@@ -23,6 +23,7 @@ import {
   type WatchOrderItem,
 } from '@/src/utils/watchRelations';
 import { GlassPlayer } from '@/src/components/GlassPlayer';
+import { AmbientSettingsControls } from '@/src/components/AmbientSettingsControls';
 import { WatchPlaylistPanel } from '@/src/components/WatchPlaylistPanel';
 import { WatchAnimeMeta } from '@/src/components/WatchAnimeMeta';
 import { WatchCommentsSection } from '@/src/components/WatchCommentsSection';
@@ -354,12 +355,19 @@ export const WatchPage: React.FC = () => {
   );
   const [backupNoticeDismissed, setBackupNoticeDismissed] = useState(false);
   const [sizePopover, setSizePopover] = useState(false);
+  const [ambientPopover, setAmbientPopover] = useState(false);
   const [synExpanded, setSynExpanded] = useState(false);
 
   const [resolvedEmbed, setResolvedEmbed] = useState<ResolvedEmbedResult>(() =>
     createLoadingEmbed(server)
   );
   const [streamRetryKey, setStreamRetryKey] = useState(0);
+  const bypassCacheRef = useRef(false);
+  const autoplayPrefRef = useRef(playerPrefs.autoplayNext);
+
+  useEffect(() => {
+    autoplayPrefRef.current = playerPrefs.autoplayNext;
+  }, [playerPrefs.autoplayNext]);
 
   useEffect(() => {
     if (!anime) {
@@ -368,12 +376,15 @@ export const WatchPage: React.FC = () => {
     }
 
     const controller = new AbortController();
+    const shouldBypassCache = bypassCacheRef.current;
+    bypassCacheRef.current = false;
+
     setResolvedEmbed(createLoadingEmbed(server, {
       anilistId: anime.anilistId ?? anime.id,
       malId: anime.malId,
       tmdbId: anime.tmdbId,
       episodeNumber: currentEpisode.number,
-    }, playerPrefs.autoplayNext));
+    }, autoplayPrefRef.current));
 
     resolveAniVaultStream({
       server,
@@ -382,7 +393,8 @@ export const WatchPage: React.FC = () => {
       tmdbId: anime.tmdbId,
       episodeNumber: currentEpisode.number,
       audioMode,
-      autoplay: playerPrefs.autoplayNext,
+      autoplay: autoplayPrefRef.current,
+      bypassCache: shouldBypassCache,
       signal: controller.signal,
     }).then((result) => {
       if (!controller.signal.aborted) setResolvedEmbed(result);
@@ -397,7 +409,6 @@ export const WatchPage: React.FC = () => {
     anime?.tmdbId,
     currentEpisode.number,
     audioMode,
-    playerPrefs.autoplayNext,
     streamRetryKey,
   ]);
 
@@ -490,7 +501,10 @@ export const WatchPage: React.FC = () => {
             audioMode={audioMode}
             server={server}
             resolvedEmbed={resolvedEmbed}
-            onRetryResolve={() => setStreamRetryKey((key) => key + 1)}
+            onRetryResolve={() => {
+              bypassCacheRef.current = true;
+              setStreamRetryKey((key) => key + 1);
+            }}
             onSelectServer={handleSelectServer}
             hasPrev={hasPrev}
             hasNext={hasNext}
@@ -577,7 +591,43 @@ export const WatchPage: React.FC = () => {
                 <button
                   type="button"
                   className="watch-pill"
-                  onClick={() => setSizePopover((p) => !p)}
+                  aria-expanded={ambientPopover}
+                  aria-label="Ambient light settings"
+                  title="Ambient light settings (Blur, Spread, Fade, Views)"
+                  onClick={() => {
+                    setAmbientPopover((p) => !p);
+                    setSizePopover(false);
+                  }}
+                >
+                  <Sliders size={13} />
+                  <span>Ambient tune</span>
+                </button>
+                {ambientPopover && (
+                  <div
+                    className="facet-popover"
+                    style={{
+                      padding: 14,
+                      width: 312,
+                      maxWidth: 'calc(100vw - 24px)',
+                      maxHeight: 'none',
+                      bottom: 'calc(100% + 8px)',
+                      top: 'auto',
+                    }}
+                  >
+                    <AmbientSettingsControls variant="popover" />
+                  </div>
+                )}
+              </div>
+
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  className="watch-pill"
+                  aria-expanded={sizePopover}
+                  onClick={() => {
+                    setSizePopover((p) => !p);
+                    setAmbientPopover(false);
+                  }}
                 >
                   <Sliders size={13} />
                   <span>{t('watch.playerSize')}</span>
@@ -644,7 +694,7 @@ export const WatchPage: React.FC = () => {
           </div>
 
           {/* Episode Title & Synopsis */}
-          <div style={{ marginTop: 18 }}>
+          <div className="watch-ep-summary" style={{ marginTop: 18 }}>
             <h1 style={{ margin: '0 0 6px', fontSize: 21, fontWeight: 700 }}>
               {currentEpisode.number}. {currentEpisode.title}
             </h1>

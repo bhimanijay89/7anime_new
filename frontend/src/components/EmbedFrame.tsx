@@ -1,157 +1,123 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import type { ResolvedEmbedResult } from '@/src/services/player';
+import {
+  createHlsPlaybackController,
+  type HlsPlaybackControllerHandle,
+  type PlaybackTelemetrySnapshot,
+  type QualityState,
+} from '@/src/services/player/hls';
 
 export interface EmbedFrameProps {
   resolved: ResolvedEmbedResult;
   title: string;
   reloadKey: number;
+  autoplay?: boolean;
+  resumePositionSec?: number;
+  controllerRef?: React.MutableRefObject<HlsPlaybackControllerHandle | null>;
   onLoad?: () => void;
-  onError?: () => void;
+  onError?: (reason?: string) => void;
+  onStreamExpired?: (resumeAtSec: number, reason: string) => void;
+  onQualityStateChange?: (state: QualityState) => void;
+  onQualityWarning?: (warning: string) => void;
+  onTelemetryChange?: (snapshot: PlaybackTelemetrySnapshot) => void;
+  onVideoElement?: (video: HTMLVideoElement | null) => void;
 }
 
-interface HlsInstance {
-  loadSource: (url: string) => void;
-  attachMedia: (media: HTMLMediaElement) => void;
-  destroy: () => void;
-  startLoad: () => void;
-  recoverMediaError: () => void;
-  on: (event: string, callback: (_event: string, data: { fatal?: boolean; type?: string }) => void) => void;
-}
+export const EmbedFrame: React.FC<EmbedFrameProps> = ({
+  resolved,
+  title,
+  reloadKey,
+  autoplay = true,
+  resumePositionSec = 0,
+  controllerRef,
+  onLoad,
+  onError,
+  onStreamExpired,
+  onQualityStateChange,
+  onQualityWarning,
+  onTelemetryChange,
+  onVideoElement,
+}) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const autoplayRef = useRef(autoplay);
+  const resumePosRef = useRef(resumePositionSec);
+  const onLoadRef = useRef(onLoad);
+  const onErrorRef = useRef(onError);
+  const onStreamExpiredRef = useRef(onStreamExpired);
+  const onQualityStateChangeRef = useRef(onQualityStateChange);
+  const onQualityWarningRef = useRef(onQualityWarning);
+  const onTelemetryChangeRef = useRef(onTelemetryChange);
+  const onVideoElementRef = useRef(onVideoElement);
 
-interface HlsConstructor {
-  new (config?: Record<string, unknown>): HlsInstance;
-  isSupported: () => boolean;
-  Events: { ERROR: string; MANIFEST_PARSED: string };
-  ErrorTypes: { NETWORK_ERROR: string; MEDIA_ERROR: string };
-}
-
-declare global {
-  interface Window {
-    Hls?: HlsConstructor;
-  }
-}
-
-let hlsScriptPromise: Promise<void> | null = null;
-
-function loadHlsLibrary(): Promise<void> {
-  if (window.Hls) return Promise.resolve();
-  if (hlsScriptPromise) return hlsScriptPromise;
-
-  const promise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-hlsjs-loader]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve(undefined), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Unable to load HLS playback engine.')), { once: true });
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.6.15/dist/hls.min.js';
-    script.async = true;
-    script.dataset.hlsjsLoader = 'true';
-    script.onload = () => resolve(undefined);
-    script.onerror = () => reject(new Error('Unable to load HLS playback engine.'));
-    document.head.appendChild(script);
-  }).catch((error: unknown) => {
-    hlsScriptPromise = null;
-    throw error;
+  useEffect(() => {
+    autoplayRef.current = autoplay;
+    resumePosRef.current = resumePositionSec;
+    onLoadRef.current = onLoad;
+    onErrorRef.current = onError;
+    onStreamExpiredRef.current = onStreamExpired;
+    onQualityStateChangeRef.current = onQualityStateChange;
+    onQualityWarningRef.current = onQualityWarning;
+    onTelemetryChangeRef.current = onTelemetryChange;
+    onVideoElementRef.current = onVideoElement;
   });
 
-  hlsScriptPromise = promise;
-  return promise;
-}
-
-export const EmbedFrame: React.FC<EmbedFrameProps> = ({ resolved, title, reloadKey, onLoad, onError }) => {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const handleVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    onVideoElementRef.current?.(node);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
     const source = resolved.hlsProxyUrl || resolved.embedUrl;
     if (!video || !resolved.ok || !source) return;
 
-    let disposed = false;
-    let hls: HlsInstance | null = null;
+    const controller = createHlsPlaybackController({
+      video,
+      source,
+      autoplay: autoplayRef.current,
+      resumePositionSec: resumePosRef.current,
+      resolutionLatencyMs: resolved.resolutionLatencyMs ?? null,
+      onLoad: () => onLoadRef.current?.(),
+      onError: (reason) => onErrorRef.current?.(reason),
+      onStreamExpired: (resumeAtSec, reason) =>
+        onStreamExpiredRef.current?.(resumeAtSec, reason),
+      onQualityStateChange: (state) => onQualityStateChangeRef.current?.(state),
+      onQualityWarning: (warning) => onQualityWarningRef.current?.(warning),
+      onTelemetryChange: (snapshot) => onTelemetryChangeRef.current?.(snapshot),
+    });
 
-    const handleLoaded = () => onLoad?.();
-    const handleVideoError = () => onError?.();
-    video.addEventListener('loadeddata', handleLoaded);
-    video.addEventListener('error', handleVideoError);
+    if (controllerRef) {
+      controllerRef.current = controller;
+    }
 
-    const start = async () => {
-      // Prefer hls.js on browsers with MediaSource. Some Android browsers report
-      // native HLS support but fail to load provider playlists through it.
-      try {
-        await loadHlsLibrary();
-      } catch (error) {
-        console.warn('[AniVault HLS] hls.js could not be loaded; trying native HLS:', error);
-      }
-      if (disposed) return;
-      const Hls = window.Hls;
-
-      if (Hls?.isSupported()) {
-        hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: false,
-          backBufferLength: 30,
-          manifestLoadingTimeOut: 20000,
-          levelLoadingTimeOut: 20000,
-          fragLoadingTimeOut: 30000,
-        });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (!data.fatal || disposed || !hls) return;
-          console.error('[AniVault HLS] Fatal playback error:', data);
-          // Match the API tester's recovery behavior: transient playlist/segment
-          // network failures and decode errors should recover before failing the player.
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            hls.startLoad();
-            return;
-          }
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            hls.recoverMediaError();
-            return;
-          }
-          onError?.();
-        });
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          // Let browser autoplay policy decide; controls remain available if blocked.
-          video.play().catch(() => {});
-        });
-        hls.attachMedia(video);
-        hls.loadSource(source);
-        return;
-      }
-
-      if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = source;
-        video.load();
-        return;
-      }
-
-      throw new Error('This browser does not support HLS playback.');
-    };
-
-    start().catch((error) => {
+    controller.start().catch((error) => {
       console.error('[AniVault HLS] Playback initialization failed:', error);
-      if (!disposed) onError?.();
+      onErrorRef.current?.(
+        error instanceof Error ? error.message : 'Unable to initialize HLS playback.'
+      );
     });
 
     return () => {
-      disposed = true;
-      video.removeEventListener('loadeddata', handleLoaded);
-      video.removeEventListener('error', handleVideoError);
-      hls?.destroy();
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
+      if (controllerRef && controllerRef.current === controller) {
+        controllerRef.current = null;
+      }
+      controller.destroy();
     };
-  }, [resolved.ok, resolved.hlsProxyUrl, resolved.embedUrl, reloadKey, onLoad, onError]);
+  }, [
+    resolved.ok,
+    resolved.hlsProxyUrl,
+    resolved.embedUrl,
+    resolved.resolutionLatencyMs,
+    reloadKey,
+    controllerRef,
+  ]);
 
   if (!resolved.ok || !(resolved.hlsProxyUrl || resolved.embedUrl)) return null;
 
   return (
     <video
       key={reloadKey}
-      ref={videoRef}
+      ref={handleVideoRef}
       className="glassplayer__embed-iframe"
       style={{
         position: 'absolute',
@@ -159,7 +125,7 @@ export const EmbedFrame: React.FC<EmbedFrameProps> = ({ resolved, title, reloadK
         width: '100%',
         height: '100%',
         border: 0,
-        background: '#06070b',
+        background: 'transparent',
         zIndex: 1,
         objectFit: 'contain',
       }}

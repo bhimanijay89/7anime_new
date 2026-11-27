@@ -15,6 +15,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5",
+    "youtube-ambientlight": "file:./vendor/youtube-ambientlight-2.38.17.tgz",
     "zustand": "^5.1.0"
   },
   "devDependencies": {
